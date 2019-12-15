@@ -1,0 +1,240 @@
+ //Shan Mulgrew 
+ /*******************************
+***** SECTION 1 - OPTIONS *****
+*******************************/
+
+options{
+  IGNORE_CASE = true;
+  
+}
+
+/*********************************
+***** SECTION 2 - USER CODE *****
+*********************************/
+
+PARSER_BEGIN(Assign1)
+  public class Assign1 {
+    public static void main(String args[]) {
+      Assign1 parser;
+      if (args.length == 0) {
+        System.out.println("Reading from standard input...");
+        parser = new Assign1(System.in);
+      }
+      else if (args.length == 1) {
+        try {
+          parser = new Assign1(new java.io.FileInputStream(args[0]));
+        }
+        catch (java.io.FileNotFoundException e) {
+          System.err.println("File " + args[0] + " not found.");
+          return;
+        }
+      }
+      else {
+        System.out.println("Assign1: Usage is one of:");
+        System.out.println("      java Assign1 < inputfile");
+        System.out.println("OR");
+        System.out.println("      java Assign1 inputfile");
+        return;
+      }
+      //try catch 
+      try {
+  			parser.program();
+  			System.out.println("Parsing successful");
+		  }
+  		catch (ParseException e) {
+  			System.out.println("Encountered errors during parsing.");
+  			System.out.println(e.getMessage());
+  		}
+
+    }//end of methid 
+  }// end of class
+
+PARSER_END(Assign1)
+
+/****************************************
+***** SECTION 3 - TOKEN DEFINITIONS *****
+****************************************/
+
+
+TOKEN_MGR_DECLS :
+{
+  //initialise commentNesting
+static int commentNesting = 0;
+}
+
+/* SKIP WHITESPACE AND COMMENTS */
+SKIP :
+{
+  " "
+  | "\t"
+  | "\n"
+  | "\r"
+  | "\f"
+}
+SKIP :
+{
+  < "//" ([" "-"~"])* ("\n"|"\r"|"\r\n") >
+  | "/*" { commentNesting++; } : IN_COMMENT
+}
+<IN_COMMENT> SKIP :
+{
+  "/*" { commentNesting++;}
+  | "*/" {commentNesting--; if (commentNesting==0) SwitchTo(DEFAULT);}
+  | <~[]>
+}
+
+
+/* RESERVED WORDS */
+TOKEN : {
+     <VAR: "var">
+    |<CONST:"constant">
+    |<RETURN:"return">
+    |<INTEGER:"integer">
+    |<BOOLEAN:"boolean">
+    |<VOID:"void">
+    |<MAIN:"main">
+    |<IF:"if">
+    |<ELSE:"else">
+    |<TRUE:"true">
+    |<FALSE:"false">
+    |<WHILE:"while">
+    |<SKIPP:"skip">
+
+/*Punctuation and operators*/
+
+    |<COMMA:",">
+    |<SEMICOLON:";">
+    |<COLON:":">
+    |<ASSIGN:"=">
+    |<LBRACE:"{">
+    |<RBRACE:"}">
+    |<LBRACK:"(">
+    |<RBRACK:")">
+    |<PLUS:"+">
+    |<MINUS:"-">
+    |<NEGATE:"~">
+    |<OR:"||">
+    |<AND:"&&">
+    |<EQUAL:"==">
+    |<NOT_EQUAL:"!=">
+    |<LESSTHEN:"<">
+    |<LESSTHEN_EQUAL:"<=">
+    |<GREATERTHEN:">">
+    |<GREATERTHEN_EQUAL:">=">
+
+
+/*integers and string */
+ 
+    |< #DIGIT: ["0"-"9"]>
+    |< #CHAR: ["a"-"z","A"-"Z"]>
+    |<NUM :((<MINUS>)?["1"-"9"](<DIGIT>)*)| ((<MINUS>)? ["0"])>
+    |<ID: (<CHAR>)((<DIGIT>)|(<CHAR>)|"_")*>
+/*anything not recognised*/
+   |< OTHER : ~[] >
+}
+/***********************************
+***** SECTION 4 - THE GRAMMAR *****
+***********************************/
+
+void program() : {} {
+    decl_list() function_list() main() 
+}
+void decl_list():{}{
+  decl()<SEMICOLON>decl_list()
+  |{}
+}
+void decl():{}{
+    var_decl()| const_decl()
+}
+void var_decl():{}{
+    <VAR> <ID> <COLON> type()
+}
+void const_decl():{}{
+    <CONST> <ID><COLON> type() <ASSIGN> expression()
+}
+void function_list():{}{
+    function() function_list()
+    | {}
+}
+void function():{}{
+    type() <ID> <LBRACK> param_list()<RBRACK>
+    <LBRACE>decl_list() statement_block()
+    <RETURN> <LBRACK>(expression()|{})<RBRACK><SEMICOLON><RBRACE>
+}
+void type():{}{
+    <INTEGER>|<BOOLEAN>|<VOID>
+}
+void param_list():{}{
+    nemp_param_list()|{}
+}
+void nemp_param_list():{}{
+    <ID><COLON> type() (<COMMA> nemp_param_list()|{})
+}
+void main():{}{
+    <MAIN><LBRACE>decl_list() statement_block() <RBRACE>
+}
+void statement_block():{}{
+    (statement() statement_block() )|{}
+}
+void statement():{}{
+   <ID> (<ASSIGN>expression() <SEMICOLON> 
+   | <LBRACK> arg_list() <RBRACK> <SEMICOLON>)
+
+  | <LBRACE>statement_block()<RBRACE>
+  | <IF> condition() <LBRACE> statement_block() <RBRACE> 
+    <ELSE> <LBRACE> statement_block() <RBRACE>
+  | <WHILE> condition() <LBRACE> statement_block() <RBRACE>
+  | <SKIPP> <SEMICOLON>
+}
+
+void expression(): {} {
+
+     fragment() (binary_arith_op() fragment() | {})
+    | <LBRACK> expression() <RBRACK>
+}
+void binary_arith_op():{}{
+  <PLUS>|<MINUS>
+}
+
+void fragment(): {} {
+
+    (<MINUS> | {}) <ID> (<LBRACK> arg_list() <RBRACK> | {}) fragment_1()
+    | <NUM> fragment_1()
+    | <TRUE> fragment_1()
+    | <FALSE> fragment_1()
+}
+
+
+void fragment_1(): {} {
+
+    binary_arith_op() expression() fragment_1()
+    | {}
+}
+void condition():{}{
+    condition_1()condition_2()
+    
+}
+void condition_1():{}{
+  <NEGATE>condition()
+  |LOOKAHEAD(3)<LBRACK>condition()<RBRACK>
+  |(expression() comp_op()expression())
+}
+void condition_2():{}{
+  <AND>condition()
+  |<OR>condition()
+  |{}
+}
+void comp_op():{}{
+    <EQUAL>
+    |<NOT_EQUAL>
+    |<LESSTHEN>
+    |<LESSTHEN_EQUAL>
+    |<GREATERTHEN>
+    |<GREATERTHEN_EQUAL>
+}
+void arg_list():{}{
+    nemp_arg_list()|{}
+}
+void nemp_arg_list():{}{
+    LOOKAHEAD(2)<ID>|<ID><COMMA>nemp_arg_list()
+}
