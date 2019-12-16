@@ -1,0 +1,364 @@
+/*******************************
+***** SECTION 1 - OPTIONS *****
+*******************************/
+
+options {
+  JAVA_UNICODE_ESCAPE = true;
+    IGNORE_CASE = true;
+    MULTI = true;
+    VISITOR = true;
+    NODE_DEFAULT_VOID = true;
+    NODE_PREFIX = "";
+    	}
+
+/*********************************
+***** SECTION 2 - USER CODE *****
+****CODE TAKEN FROM NOTES *****
+*********************************/
+
+PARSER_BEGIN(assign2)
+
+import java.io.*;
+import java.util.*;
+
+public class assign2
+{
+     public static STC ST = new STC();
+     public static String scope = "global";
+     public static Hashtable ht = new Hashtable();
+
+  public static void main(String[] args) throws ParseException, FileNotFoundException
+  {
+    
+
+    if (args.length < 1)
+    {
+      System.out.println("Please pass in the filename.");
+      System.exit(1);
+    }
+
+    assign2 parser = new assign2(new FileInputStream(args[0]));
+
+    try{
+    SimpleNode root = parser.program();
+
+    //print AST
+    System.out.println("____________________");
+    System.out.println("Abstract Syntax Tree:");
+    System.out.println("____________________");
+
+    root.dump(" ");
+
+    //print Symbol Table
+    System.out.println();
+    System.out.println("____________________");
+    System.out.println("Symbol Table:");
+    System.out.println("____________________");
+    ST.print();
+
+    //print semantic checks 
+    //System.out.println("Program:");
+    //PrintVisitor pv = new PrintVisitor();
+    //root.jjAccept(pv,null);
+
+    //System.out.println("Type Checker");
+    //TypeCheckVistor tc = new TypeCheckVisitor();
+    //root.jjAccept(tc,ST);
+
+    
+
+    //3 address CODE
+
+
+    } catch(ParseException e){
+        System.out.println(e.getMessage());
+        System.out.println("Encountered erros");
+    }
+   
+
+    //while (t.hasMoreElements())
+    //{
+
+    //System.out.println();
+    //System.out.println("Program:");
+    //PrintVisitor pv = new PrintVisitor();
+    //root.jjtAccept(pv, null);
+
+    //System.out.println();
+    //System.out.println("Type Checking:");
+    //TypeCheckVisitor tc = new TypeCheckVisitor();
+    //root.jjtAccept(tc, ST);    
+  }
+}
+
+PARSER_END(assign2)
+
+/****************************************
+***** SECTION 3 - TOKEN DEFINITIONS *****
+****************************************/
+
+
+TOKEN_MGR_DECLS :
+{
+    static int commentNesting = 0;
+}
+/* SKIP WHITESPACE AND COMMENTS */
+SKIP :
+{
+    " "
+  | "\t"
+  | "\n" 
+  | "\r" 
+  | "\f" 
+}
+/* Ingore comments */
+SKIP : {
+    < "//" ([" "-"~"])* ("\n" | "\r" | "\r\n") >
+  |   "/*" { commentNesting++; } : IN_COMMENT
+}
+<IN_COMMENT> SKIP : {
+    "/*" { commentNesting++; }
+  | "*/" { commentNesting--;
+          if (commentNesting == 0)
+              SwitchTo(DEFAULT);
+         }
+  /* Anything not recognised */
+  | <~[]>
+}
+
+
+/* RESERVED WORDS */
+TOKEN : {
+     <VAR: "var">
+    |<CONST:"constant">
+    |<RETURN:"return">
+    |<INTEGER:"integer">
+    |<BOOLEAN:"boolean">
+    |<VOID:"void">
+    |<MAIN:"main">
+    |<IF:"if">
+    |<ELSE:"else">
+    |<TRUE:"true">
+    |<FALSE:"false">
+    |<WHILE:"while">
+    |<SKIPP:"skip">
+
+/*Punctuation and operators*/
+
+    |<COMMA:",">
+    |<SEMICOLON:";">
+    |<COLON:":">
+    |<ASSIGN:"=">
+    |<LBRACE:"{">
+    |<RBRACE:"}">
+    |<LBRACK:"(">
+    |<RBRACK:")">
+    |<PLUS:"+">
+    |<MINUS:"-">
+    |<NEGATE:"~">
+    |<OR:"||">
+    |<AND:"&&">
+    |<EQUAL:"==">
+    |<NOT_EQUAL:"!=">
+    |<LESSTHEN:"<">
+    |<LESSTHEN_EQUAL:"<=">
+    |<GREATERTHEN:">">
+    |<GREATERTHEN_EQUAL:">=">
+
+
+/*integers and string */
+ 
+    |< #DIGIT: ["0"-"9"]>
+    |< #CHAR: ["a"-"z","A"-"Z"]>
+    |<NUM :((<MINUS>)?["1"-"9"](<DIGIT>)*)| ((<MINUS>)? ["0"])>
+    |<ID: (<CHAR>)((<DIGIT>)|(<CHAR>)|"_")*>
+/*anything not recognised*/
+   |< OTHER : ~[] >
+}
+/***********************************
+***** SECTION 4 - THE GRAMMAR *****
+***********************************/
+
+// chnaged from void to SimpleNode 
+SimpleNode program() #Program : {} {
+    decl_list() function_list() main() {return jjtThis;}
+}
+void decl_list():{}{
+  (decl()<SEMICOLON>decl_list()
+  |{})
+}
+void decl():{}{
+    var_decl()| const_decl()
+}
+
+String ID() #ID : {Token t;}
+{
+  (
+  t = <ID> {jjtThis.value = t.image; return t.image;
+    })
+}
+
+void var_decl() #VarDec :{Token t; String id; String type;}{
+     t = <VAR> id = ID() <COLON> type = type()
+     {
+       jjtThis.value = t.image;
+       ST.put(id,type,"var",scope);
+     }
+}
+
+void const_decl() #constant :{Token t; String id; String type;}
+{
+    t = <CONST> id = ID() <COLON> type= type() <ASSIGN> expression()
+    {
+      jjtThis.value = t.image;
+      ST.put(id,type,"const",scope);
+    }
+}
+void constantassign() : {Token t;} {
+    t = <ASSIGN> expression() {
+      jjtThis.value = t.image;
+    } #ConstantAssign(1)
+}
+void function_list():{}{
+    (function() function_list())
+    | {}
+}
+void function() #function :{Token t; String type; String id;}
+{
+    (type = type() id = ID() {ST.put(id, type, "function", scope);
+    
+              if(!scope.equals("global")) {
+                  ST.put(id, type, "function", "global");
+                  }
+              scope = id;
+     } 
+     <LBRACK> param_list() <RBRACK> 
+     <LBRACE>
+    decl_list()
+    statement_block()
+    <RETURN> <LBRACK> (expression() | {}) <RBRACK> <SEMICOLON> #Retur
+    <RBRACE>)
+    // we have entered new scope here
+    // scope of that function is still whatever scope it was previously
+}
+ 
+
+
+void FunctionReturn() : {Token t;}
+{
+    <RETURN> <LBRACK> (expression() | {}) <RBRACK> <SEMICOLON> 
+}
+
+String type() #TYPE :{Token t;}{
+   
+     t = <INTEGER> {jjtThis.value = t; return t.image; } #INTT
+    |t = <BOOLEAN> {jjtThis.value = t; return t.image; } #BOOLL
+    |t = <VOID>    {jjtThis.value = t; return t.image; } #VOIDD
+
+}
+void param_list ():{}{
+    nemp_param_list()|{}
+}
+void nemp_param_list() #paremlist :{String id; String type;}{
+    id = ID() <COLON> type= type() nonempty_parameterlist2()
+    {
+      ST.put(id,type,"param",scope);
+    } 
+}
+void nonempty_parameterlist2() : {}
+{
+    <COMMA> nemp_param_list()
+|   {}
+}
+void main() #MAIN :{}{
+  {scope="main";}
+    (<MAIN>
+    <LBRACE>
+        decl_list() 
+        statement_block() 
+    <RBRACE>)
+}
+void statement_block() : {}
+{
+  (statement() statement_block())| {}
+}
+
+void statement() #statement : {Token t;}
+{
+  ID() statement_prime()
+| <LBRACE> statement_block() <RBRACE>
+| <IF> condition() #conditio <LBRACE> statement_block() <RBRACE> <ELSE> <LBRACE> statement_block() <RBRACE> #iffy(3)
+| <WHILE> condition() #conditio <LBRACE> statement_block() <RBRACE> #whiley(2)
+| <SKIPP> <SEMICOLON> #skipp
+}
+
+void statement_prime() : {Token t;}
+{
+  <ASSIGN> expression() <SEMICOLON>
+| <LBRACK> arg_list() <RBRACK> <SEMICOLON>
+}
+
+void expression(): {}
+{
+    (fragment() fragment_2()) 
+|   (<LBRACK> expression() <RBRACK> fragment_2()) 
+}
+
+void fragment_2() : {}
+{
+    binary_operator() expression() 
+|   {}
+}
+
+void binary_operator() : {Token t;}
+{
+    t = <PLUS> {jjtThis.value = t.image;} #PlusOp
+|   t = <MINUS> {jjtThis.value = t.image;} #MinusOp
+}
+
+
+void fragment() : {Token t;}
+{
+    <MINUS> ID() #MinusOp
+|   t = <NUM> {jjtThis.value = t.image; } #Num
+|   t = <TRUE> {jjtThis.value = t.image; } #BoolOp 
+|   t = <FALSE> {jjtThis.value = t.image; } #BoolOp
+|   (t = <ID> [<LBRACK> arg_list() <RBRACK>] {jjtThis.value = t.image;} )#FuncReturn
+}
+
+
+void condition() : {}
+{
+  <NEGATE> condition() condition_prime()
+| LOOKAHEAD(3)<LBRACK> condition() <RBRACK> condition_prime()
+| expression() compOp() condition_prime()
+}
+
+void condition_prime() : {Token t;}
+{
+    t = <OR> condition() {jjtThis.value = t.image;} #ORCondition
+|   t = <AND> condition() {jjtThis.value = t.image;} #ANDCondition
+|   {}
+}
+
+void compOp() #Compar: {Token t;}
+{
+    t = <EQUAL> expression()            {jjtThis.value = t.image;} #EQComp
+|   t = <NOT_EQUAL> expression()         {jjtThis.value = t.image;} #NEComp
+|   t = <LESSTHEN> expression()          {jjtThis.value = t.image;} #LTComp
+|   t = <LESSTHEN_EQUAL> expression()     {jjtThis.value = t.image;} #LEComp
+|   t = <GREATERTHEN> expression()        {jjtThis.value = t.image;} #GTComp
+|   t = <GREATERTHEN_EQUAL> expression()  {jjtThis.value = t.image;} #GEComp
+}
+
+void arg_list() : {}
+{
+  [nemp_arg_list()]
+
+}
+
+void nemp_arg_list() #nArglist : {}
+{
+  ID() [<COMMA> nemp_arg_list()]
+}
+

@@ -1,0 +1,14 @@
+var i:integer;
+
+integer test_fn (i:integer){
+    var i:integer;
+    i=2;
+    return(x);
+}
+
+main{
+    var i:integer;
+    var j:boolean;
+    i=1;
+    i=test_fn(i);
+}
